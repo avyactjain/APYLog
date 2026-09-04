@@ -6,7 +6,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "tsc && node --disable-warning=DEP0040 dist/index.js",
+    "postinstall": "node scripts/fix-uuid.mjs"
   },
   "keywords": [],
   "author": "",
@@ -14,5 +15,14 @@
   "devDependencies": {
     "@types/node": "^24.13.3",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@jup-ag/lend-read": "^0.0.14"
+  },
+  "overrides": {
+    "uuid": "9.0.1",
+    "rpc-websockets": {
+      "uuid": "9.0.1"
+    }
   }
 }

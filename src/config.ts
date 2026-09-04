@@ -6,10 +6,16 @@ export type PositionRef = {
   nftId: number;
 };
 
+export type TokenYield = {
+  tokenAddress: string;
+  stakingYield: number;
+};
+
 export type AppConfig = {
   rpcUrl: string;
   intervalMinutes: number;
   positions: PositionRef[];
+  tokenYields: TokenYield[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -36,12 +42,28 @@ function parsePosition(value: unknown, index: number): PositionRef {
   return { vaultId, nftId };
 }
 
+function parseTokenYield(value: unknown, index: number): TokenYield {
+  if (!isRecord(value)) {
+    throw new Error(`config.tokenYields[${index}] must be an object`);
+  }
+
+  const { tokenAddress, stakingYield } = value;
+  if (typeof tokenAddress !== "string" || tokenAddress.trim() === "") {
+    throw new Error(`config.tokenYields[${index}].tokenAddress must be a token address`);
+  }
+  if (!isWholeNumber(stakingYield) || stakingYield < 0) {
+    throw new Error(`config.tokenYields[${index}].stakingYield must be a whole number`);
+  }
+
+  return { tokenAddress: tokenAddress.trim(), stakingYield };
+}
+
 function parseConfig(value: unknown): AppConfig {
   if (!isRecord(value)) {
     throw new Error("config.json must be an object");
   }
 
-  const { rpcUrl, intervalMinutes, positions } = value;
+  const { rpcUrl, intervalMinutes, positions, tokenYields } = value;
   if (typeof rpcUrl !== "string" || rpcUrl.trim() === "") {
     throw new Error("config.rpcUrl must be a non-empty string");
   }
@@ -54,15 +76,23 @@ function parseConfig(value: unknown): AppConfig {
   if (!Array.isArray(positions)) {
     throw new Error("config.positions must be a list");
   }
+  if (!Array.isArray(tokenYields)) {
+    throw new Error("config.tokenYields must be a list");
+  }
 
   return {
     rpcUrl: rpcUrl.trim(),
     intervalMinutes,
     positions: positions.map(parsePosition),
+    tokenYields: tokenYields.map(parseTokenYield),
   };
 }
 
 export function loadConfig(configPath = join(process.cwd(), "config.json")): AppConfig {
   const raw = readFileSync(configPath, "utf8");
   return parseConfig(JSON.parse(raw) as unknown);
+}
+
+export function stakingYieldFor(tokenYields: TokenYield[], tokenAddress: string): number {
+  return tokenYields.find((row) => row.tokenAddress === tokenAddress)?.stakingYield ?? 0;
 }

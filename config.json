@@ -1,10 +1,16 @@
 {
-  "rpcUrl": "https://api.mainnet-beta.solana.com",
-  "intervalMinutes": 10,
+  "rpcUrl": "",
+  "intervalSeconds": 10,
   "positions": [
     {
       "vaultId": 93,
       "nftId": 8
+    }
+  ],
+  "tokenYields": [
+    {
+      "tokenAddress": "59obFNBzyTBGowrkif5uK7ojS58vsuWz3ZCvg6tfZAGw",
+      "stakingYield": 800
     }
   ]
 }
