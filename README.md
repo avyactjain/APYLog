@@ -14,6 +14,16 @@ npm start
 
 Edit `config.json` for the RPC URL, snapshot interval in seconds, vault / NFT ids, and extra token yield (PST’s 8%). `npm start` snapshots once, then again on that interval. Each run appends a row to `output.csv`.
 
+## Output
+
+One snapshot:
+
+![One snapshot of vault 93, NFT 8](docs/screenshots/snapshot.png)
+
+Ctrl+C prints a short summary of `output.csv`:
+
+![Ctrl+C summary of output.csv](docs/screenshots/summary.png)
+
 ## Charge
 
 Net APY under 2% for one interval:
