@@ -10,7 +10,7 @@ const SHARE_SCALE = 1_000_000_000_000n;
 /** Daily compounding, same as the Jupiter UI. */
 const DAYS_PER_YEAR = 365;
 /** Used only for the 2% shortfall dollar amount. */
-const MINUTES_PER_YEAR = 525_600;
+const SECONDS_PER_YEAR = 31_536_000;
 const GUARANTEE = 0.02;
 /** Usual extra zeros between vault debt units and JupUSD units. */
 const DEFAULT_BORROW_SCALE = 1000n;
@@ -131,7 +131,7 @@ export async function snapshotPosition(
   client: Client,
   ref: PositionRef,
   tokenYields: TokenYield[],
-  intervalMinutes: number,
+  intervalSeconds: number,
 ): Promise<PositionSnapshot> {
   const [position, trading] = await Promise.all([
     client.vault.getPositionByVaultIdV2(ref.vaultId, ref.nftId),
@@ -163,7 +163,7 @@ export async function snapshotPosition(
   );
   const borrowed = amountUsd(asInt(position.borrow) / scale, requirePrice(prices, borrowMint));
 
-  return finishSnapshot(position, supplied, borrowed, supplyApy, borrowApy, intervalMinutes, token0Usd, token1Usd);
+  return finishSnapshot(position, supplied, borrowed, supplyApy, borrowApy, intervalSeconds, token0Usd, token1Usd);
 }
 
 /** Equity, Net APY, and shortfall vs 2%. */
@@ -173,14 +173,14 @@ function finishSnapshot(
   borrowed: number,
   supplyApy: number,
   borrowApy: number,
-  intervalMinutes: number,
+  intervalSeconds: number,
   token0Usd: number,
   token1Usd: number,
 ): PositionSnapshot {
   const equity = supplied - borrowed;
   const netApy = equity === 0 ? 0 : (supplied * supplyApy - borrowed * borrowApy) / equity;
   const shortfall =
-    netApy >= GUARANTEE ? 0 : (GUARANTEE - netApy) * equity * (intervalMinutes / MINUTES_PER_YEAR);
+    netApy >= GUARANTEE ? 0 : (GUARANTEE - netApy) * equity * (intervalSeconds / SECONDS_PER_YEAR);
 
   return {
     vaultId: position.vault.vaultId,

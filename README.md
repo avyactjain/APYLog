@@ -12,7 +12,7 @@ npm run build
 npm start
 ```
 
-Edit `config.json` for the RPC URL, snapshot interval, vault / NFT ids, and extra token yield (PST’s 8%).
+Edit `config.json` for the RPC URL, snapshot interval in seconds, vault / NFT ids, and extra token yield (PST’s 8%). `npm start` snapshots once, then again on that interval.
 
 ## Sample dump
 
@@ -53,4 +53,4 @@ Not in this dump: USD prices (Jupiter price API), PST’s 8% (`config.json`), tr
 - **Supplied USD** = PST USD + USDC USD.
 - **Supply APY** = those two APYs mixed by dollar size, plus trading APY from Fluid.
 - **Net APY** = `(supplied × supply APY − borrowed × borrow APY) / (supplied − borrowed)`.
-- If Net APY &lt; 2%: **shortfall** = `(2% − Net APY) × equity × (intervalMinutes / 525600)`.
+- If Net APY &lt; 2%: **shortfall** = `(2% − Net APY) × equity × (intervalSeconds / 31536000)`.

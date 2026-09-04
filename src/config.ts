@@ -13,7 +13,7 @@ export type TokenYield = {
 
 export type AppConfig = {
   rpcUrl: string;
-  intervalMinutes: number;
+  intervalSeconds: number;
   positions: PositionRef[];
   tokenYields: TokenYield[];
 };
@@ -63,15 +63,15 @@ function parseConfig(value: unknown): AppConfig {
     throw new Error("config.json must be an object");
   }
 
-  const { rpcUrl, intervalMinutes, positions, tokenYields } = value;
+  const { rpcUrl, intervalSeconds, positions, tokenYields } = value;
   if (typeof rpcUrl !== "string" || rpcUrl.trim() === "") {
     throw new Error("config.rpcUrl must be a non-empty string");
   }
   if (!rpcUrl.startsWith("http://") && !rpcUrl.startsWith("https://")) {
     throw new Error("config.rpcUrl must start with http:// or https://");
   }
-  if (!isWholeNumber(intervalMinutes) || intervalMinutes <= 0) {
-    throw new Error("config.intervalMinutes must be a whole number greater than 0");
+  if (!isWholeNumber(intervalSeconds) || intervalSeconds <= 0) {
+    throw new Error("config.intervalSeconds must be a whole number greater than 0");
   }
   if (!Array.isArray(positions)) {
     throw new Error("config.positions must be a list");
@@ -82,7 +82,7 @@ function parseConfig(value: unknown): AppConfig {
 
   return {
     rpcUrl: rpcUrl.trim(),
-    intervalMinutes,
+    intervalSeconds,
     positions: positions.map(parsePosition),
     tokenYields: tokenYields.map(parseTokenYield),
   };
