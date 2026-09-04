@@ -12,7 +12,15 @@ npm run build
 npm start
 ```
 
-Edit `config.json` for the RPC URL, snapshot interval in seconds, vault / NFT ids, and extra token yield (PST’s 8%). `npm start` snapshots once, then again on that interval.
+Edit `config.json` for the RPC URL, snapshot interval in seconds, vault / NFT ids, and extra token yield (PST’s 8%). `npm start` snapshots once, then again on that interval. Each run appends a row to `output.csv`.
+
+## Charge
+
+Net APY under 2% for one interval:
+
+`shortfall = (2% − Net APY) × equity × (intervalSeconds / 31536000)`
+
+If Net APY is at least 2%, that row’s shortfall is `0`. **Charge the other team the sum of `shortfall`.** `chargeToDate` on the latest row is that running total for that vault + NFT.
 
 ## Sample dump
 
@@ -53,4 +61,3 @@ Not in this dump: USD prices (Jupiter price API), PST’s 8% (`config.json`), tr
 - **Supplied USD** = PST USD + USDC USD.
 - **Supply APY** = those two APYs mixed by dollar size, plus trading APY from Fluid.
 - **Net APY** = `(supplied × supply APY − borrowed × borrow APY) / (supplied − borrowed)`.
-- If Net APY &lt; 2%: **shortfall** = `(2% − Net APY) × equity × (intervalSeconds / 31536000)`.

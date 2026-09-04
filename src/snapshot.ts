@@ -11,7 +11,7 @@ const SHARE_SCALE = 1_000_000_000_000n;
 const DAYS_PER_YEAR = 365;
 /** Used only for the 2% shortfall dollar amount. */
 const SECONDS_PER_YEAR = 31_536_000;
-const GUARANTEE = 0.02;
+export const GUARANTEE = 0.02;
 /** Usual extra zeros between vault debt units and JupUSD units. */
 const DEFAULT_BORROW_SCALE = 1000n;
 
@@ -211,7 +211,7 @@ function formatPct(value: number): string {
 }
 
 /** Print one snapshot. */
-export function printSnapshot(snap: PositionSnapshot): void {
+export function printSnapshot(snap: PositionSnapshot, chargeToDate: number, dma7: number): void {
   console.log(`vault ${String(snap.vaultId)}, NFT ${String(snap.nftId)}`);
   console.log(`  supplied: ${formatUsd(snap.supplied)}`);
   console.log(`  PST USD: ${formatUsd(snap.token0Usd)}`);
@@ -221,9 +221,11 @@ export function printSnapshot(snap: PositionSnapshot): void {
   console.log(`  supply APY: ${formatPct(snap.supplyApy)}`);
   console.log(`  borrow APY: ${formatPct(snap.borrowApy)}`);
   console.log(`  net APY: ${formatPct(snap.netApy)}`);
+  console.log(`  7-day mean: ${formatPct(dma7)}`);
   if (snap.netApy < GUARANTEE) {
     console.log(`  shortfall: ${snap.shortfall.toFixed(6)}`);
   }
+  console.log(`  charge to date: ${chargeToDate.toFixed(6)}`);
   if (snap.isLiquidated) {
     console.log("  liquidated: true");
   }

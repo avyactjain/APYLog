@@ -1,12 +1,14 @@
 import { Client } from "@jup-ag/lend-read";
 import { loadConfig, type AppConfig } from "./config.js";
+import { appendSnapshot } from "./csv.js";
 import { printSnapshot, snapshotPosition } from "./snapshot.js";
 
 async function snapshotAll(client: Client, config: AppConfig): Promise<void> {
   for (const ref of config.positions) {
     try {
       const snap = await snapshotPosition(client, ref, config.tokenYields, config.intervalSeconds);
-      printSnapshot(snap);
+      const log = appendSnapshot(snap, config.intervalSeconds);
+      printSnapshot(snap, log.chargeToDate, log.dma7);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`Failed vault ${String(ref.vaultId)}, NFT ${String(ref.nftId)}: ${message}`);
