@@ -24,12 +24,15 @@ const HEADER = [
   "isLiquidated",
 ].join(",");
 
-type PastRow = {
+type CsvRow = {
+  timestamp: string;
   timestampMs: number;
   vaultId: number;
   nftId: number;
   netApy: number;
   shortfall: number;
+  chargeToDate: number;
+  below2pct: boolean;
 };
 
 export type SnapshotLog = {
@@ -37,43 +40,77 @@ export type SnapshotLog = {
   chargeToDate: number;
 };
 
+export type PositionSummary = {
+  vaultId: number;
+  nftId: number;
+  snapshots: number;
+  below2pct: number;
+  firstAt: string;
+  lastAt: string;
+  lastNetApy: number;
+  chargeToDate: number;
+};
+
+export type OutputSummary = {
+  snapshots: number;
+  positions: PositionSummary[];
+};
+
 function csvPath(): string {
   return join(process.cwd(), "output.csv");
 }
 
-function ensureFile(path: string): void {
-  if (!existsSync(path) || readFileSync(path, "utf8").trim() === "") {
-    writeFileSync(path, `${HEADER}\n`);
-  }
-}
-
-function parsePastRows(raw: string): PastRow[] {
+function parseRows(raw: string): CsvRow[] {
   const lines = raw.trim().split("\n").slice(1);
-  const rows: PastRow[] = [];
+  const rows: CsvRow[] = [];
   for (const line of lines) {
     const cols = line.split(",");
-    const timestampMs = Date.parse(cols[0] ?? "");
+    const timestamp = cols[0] ?? "";
+    const timestampMs = Date.parse(timestamp);
     const vaultId = Number(cols[2]);
     const nftId = Number(cols[3]);
     const netApy = Number(cols[11]);
     const shortfall = Number(cols[14]);
+    const billed = Number(cols[15]);
+    const below2pct = (cols[13] ?? "") === "true";
     if (!Number.isFinite(timestampMs) || !Number.isFinite(vaultId) || !Number.isFinite(nftId)) {
       continue;
     }
-    if (!Number.isFinite(netApy) || !Number.isFinite(shortfall)) {
+    if (!Number.isFinite(netApy) || !Number.isFinite(shortfall) || !Number.isFinite(billed)) {
       continue;
     }
-    rows.push({ timestampMs, vaultId, nftId, netApy, shortfall });
+    rows.push({
+      timestamp,
+      timestampMs,
+      vaultId,
+      nftId,
+      netApy,
+      shortfall,
+      chargeToDate: billed,
+      below2pct,
+    });
   }
   return rows;
 }
 
-function samePosition(row: PastRow, snap: PositionSnapshot): boolean {
+function loadRows(): CsvRow[] {
+  const path = csvPath();
+  if (!existsSync(path)) {
+    return [];
+  }
+  const raw = readFileSync(path, "utf8");
+  if (raw.trim() === "") {
+    return [];
+  }
+  return parseRows(raw);
+}
+
+function samePosition(row: CsvRow, snap: PositionSnapshot): boolean {
   return row.vaultId === snap.vaultId && row.nftId === snap.nftId;
 }
 
 /** 7-day mean Net APY for this vault + NFT, including the new snapshot. */
-function dma7(past: PastRow[], snap: PositionSnapshot, nowMs: number): number {
+function dma7(past: CsvRow[], snap: PositionSnapshot, nowMs: number): number {
   let sum = snap.netApy;
   let count = 1;
   const oldest = nowMs - SEVEN_DAYS_MS;
@@ -87,7 +124,7 @@ function dma7(past: PastRow[], snap: PositionSnapshot, nowMs: number): number {
 }
 
 /** Sum of this position’s shortfall rows, plus this snapshot. */
-function chargeToDate(past: PastRow[], snap: PositionSnapshot): number {
+function runningCharge(past: CsvRow[], snap: PositionSnapshot): number {
   let total = snap.shortfall;
   for (const row of past) {
     if (samePosition(row, snap)) {
@@ -105,15 +142,21 @@ function apy(value: number): string {
   return value.toFixed(8);
 }
 
+function ensureFile(path: string): void {
+  if (!existsSync(path) || readFileSync(path, "utf8").trim() === "") {
+    writeFileSync(path, `${HEADER}\n`);
+  }
+}
+
 /** Append one snapshot. Returns 7-day mean APY and running amount to charge. */
 export function appendSnapshot(snap: PositionSnapshot, intervalSeconds: number): SnapshotLog {
   const path = csvPath();
   ensureFile(path);
-  const past = parsePastRows(readFileSync(path, "utf8"));
+  const past = loadRows();
   const now = new Date();
   const log: SnapshotLog = {
     dma7: dma7(past, snap, now.getTime()),
-    chargeToDate: chargeToDate(past, snap),
+    chargeToDate: runningCharge(past, snap),
   };
   const row = [
     now.toISOString(),
@@ -136,4 +179,38 @@ export function appendSnapshot(snap: PositionSnapshot, intervalSeconds: number):
   ].join(",");
   appendFileSync(path, `${row}\n`);
   return log;
+}
+
+/** One line per vault + NFT: last Net APY, times under 2%, amount to charge. */
+export function readOutputSummary(): OutputSummary {
+  const rows = loadRows();
+  const byPosition = new Map<string, PositionSummary>();
+  for (const row of rows) {
+    const key = `${String(row.vaultId)}:${String(row.nftId)}`;
+    const existing = byPosition.get(key);
+    if (existing === undefined) {
+      byPosition.set(key, {
+        vaultId: row.vaultId,
+        nftId: row.nftId,
+        snapshots: 1,
+        below2pct: row.below2pct ? 1 : 0,
+        firstAt: row.timestamp,
+        lastAt: row.timestamp,
+        lastNetApy: row.netApy,
+        chargeToDate: row.chargeToDate,
+      });
+      continue;
+    }
+    existing.snapshots += 1;
+    if (row.below2pct) {
+      existing.below2pct += 1;
+    }
+    existing.lastAt = row.timestamp;
+    existing.lastNetApy = row.netApy;
+    existing.chargeToDate = row.chargeToDate;
+  }
+  return {
+    snapshots: rows.length,
+    positions: [...byPosition.values()].sort((a, b) => a.vaultId - b.vaultId || a.nftId - b.nftId),
+  };
 }

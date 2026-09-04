@@ -197,36 +197,3 @@ function finishSnapshot(
     token1Usd,
   };
 }
-
-// --- print ---
-
-/** Dollars with two decimals. */
-function formatUsd(value: number): string {
-  return value.toFixed(2);
-}
-
-/** 0.0288 → "2.88%". */
-function formatPct(value: number): string {
-  return `${(value * 100).toFixed(2)}%`;
-}
-
-/** Print one snapshot. */
-export function printSnapshot(snap: PositionSnapshot, chargeToDate: number, dma7: number): void {
-  console.log(`vault ${String(snap.vaultId)}, NFT ${String(snap.nftId)}`);
-  console.log(`  supplied: ${formatUsd(snap.supplied)}`);
-  console.log(`  PST USD: ${formatUsd(snap.token0Usd)}`);
-  console.log(`  USDC USD: ${formatUsd(snap.token1Usd)}`);
-  console.log(`  borrowed: ${formatUsd(snap.borrowed)}`);
-  console.log(`  equity: ${formatUsd(snap.equity)}`);
-  console.log(`  supply APY: ${formatPct(snap.supplyApy)}`);
-  console.log(`  borrow APY: ${formatPct(snap.borrowApy)}`);
-  console.log(`  net APY: ${formatPct(snap.netApy)}`);
-  console.log(`  7-day mean: ${formatPct(dma7)}`);
-  if (snap.netApy < GUARANTEE) {
-    console.log(`  shortfall: ${snap.shortfall.toFixed(6)}`);
-  }
-  console.log(`  charge to date: ${chargeToDate.toFixed(6)}`);
-  if (snap.isLiquidated) {
-    console.log("  liquidated: true");
-  }
-}

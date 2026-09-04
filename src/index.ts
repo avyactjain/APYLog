@@ -1,17 +1,18 @@
 import { Client } from "@jup-ag/lend-read";
 import { loadConfig, type AppConfig } from "./config.js";
 import { appendSnapshot } from "./csv.js";
-import { printSnapshot, snapshotPosition } from "./snapshot.js";
+import { log, printOutputSummary, printSnapshot } from "./log.js";
+import { snapshotPosition } from "./snapshot.js";
 
 async function snapshotAll(client: Client, config: AppConfig): Promise<void> {
   for (const ref of config.positions) {
     try {
       const snap = await snapshotPosition(client, ref, config.tokenYields, config.intervalSeconds);
-      const log = appendSnapshot(snap, config.intervalSeconds);
-      printSnapshot(snap, log.chargeToDate, log.dma7);
+      const saved = appendSnapshot(snap, config.intervalSeconds);
+      printSnapshot(snap, saved.chargeToDate, saved.dma7);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`Failed vault ${String(ref.vaultId)}, NFT ${String(ref.nftId)}: ${message}`);
+      log.error(`Failed vault ${String(ref.vaultId)}, NFT ${String(ref.nftId)}: ${message}`);
     }
   }
 }
@@ -21,12 +22,14 @@ async function main(): Promise<void> {
   const client = new Client(config.rpcUrl);
   const delayMs = config.intervalSeconds * 1000;
   let running = false;
-
-  console.log(`Snapshot every ${String(config.intervalSeconds)} seconds`);
+  let stopping = false;
 
   const tick = async (): Promise<void> => {
+    if (stopping) {
+      return;
+    }
     if (running) {
-      console.error("Previous snapshot still running; skipping this tick");
+      log.warn("Previous snapshot still running; skipping this tick");
       return;
     }
     running = true;
@@ -37,13 +40,33 @@ async function main(): Promise<void> {
     }
   };
 
-  await tick();
-  setInterval(() => {
+  const timer = setInterval(() => {
     void tick();
   }, delayMs);
+
+  const stop = (signal: string): void => {
+    if (stopping) {
+      process.exit(0);
+    }
+    stopping = true;
+    clearInterval(timer);
+    log.info(`Stopped (${signal})`);
+    printOutputSummary();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", () => {
+    stop("SIGINT");
+  });
+  process.on("SIGTERM", () => {
+    stop("SIGTERM");
+  });
+
+  log.start(`Snapshot every ${String(config.intervalSeconds)} seconds`);
+  await tick();
 }
 
 main().catch((error: unknown) => {
-  console.error(error);
+  log.error(error);
   process.exitCode = 1;
 });
