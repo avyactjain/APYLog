@@ -1,0 +1,10 @@
+{
+  "rpcUrl": "https://api.mainnet-beta.solana.com",
+  "intervalMinutes": 10,
+  "positions": [
+    {
+      "vaultId": 93,
+      "nftId": 8
+    }
+  ]
+}

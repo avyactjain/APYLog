@@ -1,0 +1,18 @@
+{
+  "name": "apylog",
+  "version": "1.0.0",
+  "description": "Snapshots PST smart-vault positions and tracks Net APY vs a 2% guarantee.",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "^7.0.2"
+  }
+}
