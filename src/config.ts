@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export type PositionRef = {
@@ -60,12 +60,12 @@ function parseTokenYield(value: unknown, index: number): TokenYield {
 
 function parseConfig(value: unknown): AppConfig {
   if (!isRecord(value)) {
-    throw new Error("config.json must be an object");
+    throw new Error("config must be an object");
   }
 
   const { rpcUrl, intervalSeconds, positions, tokenYields } = value;
   if (typeof rpcUrl !== "string" || rpcUrl.trim() === "") {
-    throw new Error("config.rpcUrl must be a non-empty string");
+    throw new Error("config.rpcUrl must be set (usually in config/local.json or config/prod.json)");
   }
   if (!rpcUrl.startsWith("http://") && !rpcUrl.startsWith("https://")) {
     throw new Error("config.rpcUrl must start with http:// or https://");
@@ -88,9 +88,58 @@ function parseConfig(value: unknown): AppConfig {
   };
 }
 
-export function loadConfig(configPath = join(process.cwd(), "config.json")): AppConfig {
-  const raw = readFileSync(configPath, "utf8");
-  return parseConfig(JSON.parse(raw) as unknown);
+/** Later keys replace earlier ones. Nested objects merge; lists replace. */
+function merge(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    const prev = out[key];
+    if (isRecord(prev) && isRecord(value)) {
+      out[key] = merge(prev, value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function readJson(path: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+  if (!isRecord(parsed)) {
+    throw new Error(`${path} must be an object`);
+  }
+  return parsed;
+}
+
+function readJsonIfPresent(path: string): Record<string, unknown> {
+  if (!existsSync(path)) {
+    return {};
+  }
+  return readJson(path);
+}
+
+/** `staging` or `prod`. `production` maps to `prod`. Empty means no env file. */
+function envLayer(): string | null {
+  const raw = (process.env.APP_ENV ?? process.env.NODE_ENV ?? "").trim().toLowerCase();
+  if (raw === "staging") {
+    return "staging";
+  }
+  if (raw === "prod" || raw === "production") {
+    return "prod";
+  }
+  return null;
+}
+
+/**
+ * Layers, last wins: default.json → staging.json or prod.json → local.json.
+ * Set APP_ENV or NODE_ENV to `staging` or `prod`.
+ */
+export function loadConfig(configDir = join(process.cwd(), "config")): AppConfig {
+  const env = envLayer();
+  const merged = merge(
+    merge(readJson(join(configDir, "default.json")), env === null ? {} : readJsonIfPresent(join(configDir, `${env}.json`))),
+    readJsonIfPresent(join(configDir, "local.json")),
+  );
+  return parseConfig(merged);
 }
 
 export function stakingYieldFor(tokenYields: TokenYield[], tokenAddress: string): number {

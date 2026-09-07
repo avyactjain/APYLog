@@ -12,7 +12,13 @@ npm run build
 npm start
 ```
 
-Edit `config.json` for the RPC URL, snapshot interval in seconds, vault / NFT ids, and extra token yield (PST’s 8%). `npm start` snapshots once, then again on that interval. Each run appends a row to `output.csv`.
+Config is layered, last file wins: `config/default.json` → `config/staging.json` or `config/prod.json` → `config/local.json`.
+
+Copy `config/local.json.example` to `config/local.json` and put your RPC URL there. `local.json` is not committed.
+
+`APP_ENV` or `NODE_ENV`: `staging` or `prod` (`production` means `prod`). Unset means default + local only.
+
+`npm start` snapshots once, then again on that interval. Each run appends a row to `output.csv`.
 
 ## Output
 
@@ -40,7 +46,7 @@ A live print may show `[Circular]`. That is the same number printed twice. The s
 
 Rates from the SDK are integers: **100 = 1%**, so divide by 10 000 for a 0.05-style yearly rate, then compound daily to APY. DEX “token per share” uses **1e12 = 1×**.
 
-Not in this dump: USD prices (Jupiter price API), PST’s 8% (`config.json`), trading yield (Fluid vault feed).
+Not in this dump: USD prices (Jupiter price API), PST’s 8% (`config/default.json`), trading yield (Fluid vault feed).
 
 ### Fields we use
 
