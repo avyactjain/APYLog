@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>APYLog</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #111;
+        color: #eee;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      main {
+        max-width: 520px;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 3rem;
+      }
+
+      h1 {
+        margin: 0 0 1.5rem;
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      #countdown {
+        margin: 0;
+        font-size: 48px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+      }
+
+      .caption {
+        margin: 0.4rem 0 1.75rem;
+        color: #999;
+        font-size: 0.95rem;
+      }
+
+      #status {
+        margin: 0 0 1rem;
+        color: #f0ad4e;
+        font-size: 0.9rem;
+        min-height: 1.2em;
+      }
+
+      #status:empty {
+        display: none;
+      }
+
+      #snapshot-count {
+        margin: 0 0 1.25rem;
+        font-size: 1.05rem;
+      }
+
+      #positions {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      }
+
+      article {
+        padding: 1rem 1.1rem;
+        border: 1px solid #2a2a2a;
+        border-radius: 10px;
+        background: #181818;
+      }
+
+      article h2 {
+        margin: 0 0 0.75rem;
+        font-size: 1.05rem;
+        font-weight: 600;
+      }
+
+      dl {
+        margin: 0;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.35rem 1rem;
+        font-size: 0.95rem;
+      }
+
+      dt {
+        color: #999;
+      }
+
+      dd {
+        margin: 0;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .ok {
+        color: #3dd68c;
+      }
+
+      .low {
+        color: #f0ad4e;
+      }
+
+      #total-charge {
+        margin: 1.5rem 0 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+
+      .waiting {
+        color: #999;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>APYLog</h1>
+      <p id="countdown">--:--</p>
+      <p class="caption">until next snapshot</p>
+      <p id="status"></p>
+      <p id="snapshot-count"></p>
+      <div id="positions"></div>
+      <p id="total-charge"></p>
+    </main>
+    <script>
+      const GUARANTEE = 0.02;
+      const countdownEl = document.getElementById("countdown");
+      const statusEl = document.getElementById("status");
+      const snapshotCountEl = document.getElementById("snapshot-count");
+      const positionsEl = document.getElementById("positions");
+      const totalChargeEl = document.getElementById("total-charge");
+
+      let nextSnapshotAt = null;
+
+      function pad2(n) {
+        return String(n).padStart(2, "0");
+      }
+
+      function formatRemaining(ms) {
+        const total = Math.max(0, Math.floor(ms / 1000));
+        const hours = Math.floor(total / 3600);
+        const minutes = Math.floor((total % 3600) / 60);
+        const seconds = total % 60;
+        if (hours >= 1) {
+          return hours + ":" + pad2(minutes) + ":" + pad2(seconds);
+        }
+        return minutes + ":" + pad2(seconds);
+      }
+
+      function formatPct(value) {
+        return (value * 100).toFixed(2) + "%";
+      }
+
+      function formatCharge(value) {
+        return value.toFixed(6);
+      }
+
+      function text(value) {
+        return document.createTextNode(String(value));
+      }
+
+      function row(dtText, ddNode) {
+        const dt = document.createElement("dt");
+        dt.appendChild(text(dtText));
+        const dd = document.createElement("dd");
+        dd.appendChild(ddNode);
+        return [dt, dd];
+      }
+
+      function netApyNode(value) {
+        const span = document.createElement("span");
+        span.className = value >= GUARANTEE ? "ok" : "low";
+        span.appendChild(text(formatPct(value)));
+        return span;
+      }
+
+      function renderSummary(data) {
+        if (data.snapshots === 0) {
+          snapshotCountEl.textContent = "";
+          positionsEl.replaceChildren();
+          const waiting = document.createElement("p");
+          waiting.className = "waiting";
+          waiting.appendChild(text("Waiting for first snapshot"));
+          positionsEl.appendChild(waiting);
+          totalChargeEl.textContent = "";
+          return;
+        }
+
+        snapshotCountEl.textContent = data.snapshots + " snapshots";
+        positionsEl.replaceChildren();
+
+        for (const pos of data.positions) {
+          const article = document.createElement("article");
+          const heading = document.createElement("h2");
+          heading.appendChild(text("vault " + pos.vaultId + ", NFT " + pos.nftId));
+          article.appendChild(heading);
+
+          const dl = document.createElement("dl");
+          const fields = [
+            row("snapshots", text(pos.snapshots)),
+            row("first", text(pos.firstAt)),
+            row("last", text(pos.lastAt)),
+            row("last net APY", netApyNode(pos.lastNetApy)),
+            row("under 2%", text(pos.below2pct)),
+            row("charge", text(formatCharge(pos.chargeToDate))),
+          ];
+          for (const [dt, dd] of fields) {
+            dl.appendChild(dt);
+            dl.appendChild(dd);
+          }
+          article.appendChild(dl);
+          positionsEl.appendChild(article);
+        }
+
+        totalChargeEl.textContent = "Total charge: " + formatCharge(data.totalCharge);
+      }
+
+      function tickCountdown() {
+        if (nextSnapshotAt === null) {
+          countdownEl.textContent = "--:--";
+          return;
+        }
+        const remaining = Date.parse(nextSnapshotAt) - Date.now();
+        countdownEl.textContent = formatRemaining(remaining);
+      }
+
+      async function fetchSummary() {
+        try {
+          const res = await fetch("/api/summary", { cache: "no-store" });
+          if (!res.ok) {
+            throw new Error("bad status");
+          }
+          const data = await res.json();
+          nextSnapshotAt = data.nextSnapshotAt;
+          statusEl.textContent = "";
+          renderSummary(data);
+          tickCountdown();
+        } catch {
+          statusEl.textContent = "Could not load summary";
+        }
+      }
+
+      fetchSummary();
+      setInterval(fetchSummary, 1000);
+      setInterval(tickCountdown, 250);
+    </script>
+  </body>
+</html>

@@ -16,9 +16,22 @@ Config is layered, last file wins: `config/default.json` → `config/staging.jso
 
 Copy `config/local.json.example` to `config/local.json` and put your RPC URL there. `local.json` is not committed.
 
+If `rpcUrl` is still empty after those files, the `RPC_URL` env var is used (for deploy).
+
 `APP_ENV` or `NODE_ENV`: `staging` or `prod` (`production` means `prod`). Unset means default + local only.
 
-`npm start` snapshots once, then again on that interval. Each run appends a row to `output.csv`.
+`npm start` runs the compiled app (run `npm run build` first). It snapshots on the interval, writes `output.csv`, and serves a summary page on `PORT` (default `3000`). Open `http://localhost:3000`.
+
+## Deploy
+
+This must stay running (snapshot timer + web UI). Use an always-on host (Railway, Render, Fly), not a static site host.
+
+```bash
+docker build -t apylog .
+docker run --rm -p 3000:3000 -e RPC_URL="https://your-rpc" -e APP_ENV=prod -e PORT=3000 apylog
+```
+
+Set `RPC_URL`, `APP_ENV=prod`, and `PORT` on the host. Do not commit the RPC URL. CSV history starts empty on a fresh host and is lost on restart unless you add a volume later.
 
 ## Output
 

@@ -1,0 +1,9 @@
+node_modules
+dist
+output.csv
+config/local.json
+.git
+.env
+*.log
+.DS_Store
+docs

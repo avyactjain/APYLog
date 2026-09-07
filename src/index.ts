@@ -2,6 +2,7 @@ import { Client } from "@jup-ag/lend-read";
 import { loadConfig, type AppConfig } from "./config.js";
 import { appendSnapshot } from "./csv.js";
 import { log, printOutputSummary, printSnapshot } from "./log.js";
+import { listenPort, startServer } from "./server.js";
 import { snapshotPosition } from "./snapshot.js";
 
 async function snapshotAll(client: Client, config: AppConfig): Promise<void> {
@@ -21,8 +22,13 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const client = new Client(config.rpcUrl);
   const delayMs = config.intervalSeconds * 1000;
+  const port = listenPort();
   let running = false;
   let stopping = false;
+
+  startServer(config.intervalSeconds, port);
+  log.start(`Web UI on http://0.0.0.0:${String(port)}`);
+  log.start(`Snapshot every ${String(config.intervalSeconds)} seconds`);
 
   const tick = async (): Promise<void> => {
     if (stopping) {
@@ -62,7 +68,6 @@ async function main(): Promise<void> {
     stop("SIGTERM");
   });
 
-  log.start(`Snapshot every ${String(config.intervalSeconds)} seconds`);
   await tick();
 }
 

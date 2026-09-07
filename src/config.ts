@@ -129,15 +129,30 @@ function envLayer(): string | null {
   return null;
 }
 
+/** File layers win. If rpcUrl is still empty, use env `RPC_URL` (for deploy). */
+function applyRpcUrlEnv(merged: Record<string, unknown>): Record<string, unknown> {
+  const current = merged.rpcUrl;
+  if (typeof current === "string" && current.trim() !== "") {
+    return merged;
+  }
+  const fromEnv = process.env.RPC_URL?.trim() ?? "";
+  if (fromEnv === "") {
+    return merged;
+  }
+  return { ...merged, rpcUrl: fromEnv };
+}
+
 /**
  * Layers, last wins: default.json → staging.json or prod.json → local.json.
- * Set APP_ENV or NODE_ENV to `staging` or `prod`.
+ * Then `RPC_URL` if rpcUrl is still missing. Set APP_ENV or NODE_ENV to `staging` or `prod`.
  */
 export function loadConfig(configDir = join(process.cwd(), "config")): AppConfig {
   const env = envLayer();
-  const merged = merge(
-    merge(readJson(join(configDir, "default.json")), env === null ? {} : readJsonIfPresent(join(configDir, `${env}.json`))),
-    readJsonIfPresent(join(configDir, "local.json")),
+  const merged = applyRpcUrlEnv(
+    merge(
+      merge(readJson(join(configDir, "default.json")), env === null ? {} : readJsonIfPresent(join(configDir, `${env}.json`))),
+      readJsonIfPresent(join(configDir, "local.json")),
+    ),
   );
   return parseConfig(merged);
 }

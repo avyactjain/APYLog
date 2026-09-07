@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc",
     "prestart": "node scripts/fix-uuid.mjs",
-    "start": "tsc && node --disable-warning=DEP0040 dist/index.js",
+    "start": "node --disable-warning=DEP0040 dist/index.js",
+    "dev": "tsc && node --disable-warning=DEP0040 dist/index.js",
     "postinstall": "node scripts/fix-uuid.mjs"
   },
   "keywords": [],

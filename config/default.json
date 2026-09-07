@@ -1,5 +1,5 @@
 {
-  "intervalSeconds": 10,
+  "intervalSeconds": 20,
   "positions": [
     {
       "vaultId": 93,
