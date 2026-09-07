@@ -118,6 +118,19 @@
       .waiting {
         color: #999;
       }
+
+      .section-label {
+        margin: 0.85rem 0 0.35rem;
+        color: #bbb;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .section-label:first-of-type {
+        margin-top: 0;
+      }
     </style>
   </head>
   <body>
@@ -159,6 +172,10 @@
         return (value * 100).toFixed(2) + "%";
       }
 
+      function formatUsd(value) {
+        return value.toFixed(2);
+      }
+
       function formatCharge(value) {
         return value.toFixed(6);
       }
@@ -173,6 +190,20 @@
         const dd = document.createElement("dd");
         dd.appendChild(ddNode);
         return [dt, dd];
+      }
+
+      function appendRows(dl, fields) {
+        for (const [dt, dd] of fields) {
+          dl.appendChild(dt);
+          dl.appendChild(dd);
+        }
+      }
+
+      function sectionLabel(label) {
+        const p = document.createElement("p");
+        p.className = "section-label";
+        p.appendChild(text(label));
+        return p;
       }
 
       function netApyNode(value) {
@@ -198,25 +229,39 @@
         positionsEl.replaceChildren();
 
         for (const pos of data.positions) {
+          const last = pos.lastSnapshot || {};
           const article = document.createElement("article");
           const heading = document.createElement("h2");
           heading.appendChild(text("vault " + pos.vaultId + ", NFT " + pos.nftId));
           article.appendChild(heading);
 
-          const dl = document.createElement("dl");
-          const fields = [
+          article.appendChild(sectionLabel("Last snapshot"));
+          const detailDl = document.createElement("dl");
+          appendRows(detailDl, [
+            row("PST deposited", text("$" + formatUsd(last.token0Usd || 0))),
+            row("PST APY", text(formatPct(last.token0Apy || 0))),
+            row("USDC deposited", text("$" + formatUsd(last.token1Usd || 0))),
+            row("USDC APY", text(formatPct(last.token1Apy || 0))),
+            row("trading APY", text(formatPct(last.tradingApy || 0))),
+            row("supply APY", text(formatPct(last.supplyApy || 0))),
+            row("JupUSD borrowed", text("$" + formatUsd(last.borrowed || 0))),
+            row("borrow APY", text(formatPct(last.borrowApy || 0))),
+            row("equity", text("$" + formatUsd(last.equity || 0))),
+            row("net APY", netApyNode(last.netApy || 0)),
+          ]);
+          article.appendChild(detailDl);
+
+          article.appendChild(sectionLabel("Guarantee"));
+          const guaranteeDl = document.createElement("dl");
+          appendRows(guaranteeDl, [
             row("snapshots", text(pos.snapshots)),
             row("first", text(pos.firstAt)),
             row("last", text(pos.lastAt)),
-            row("last net APY", netApyNode(pos.lastNetApy)),
             row("under 2%", text(pos.below2pct)),
             row("charge", text(formatCharge(pos.chargeToDate))),
-          ];
-          for (const [dt, dd] of fields) {
-            dl.appendChild(dt);
-            dl.appendChild(dd);
-          }
-          article.appendChild(dl);
+          ]);
+          article.appendChild(guaranteeDl);
+
           positionsEl.appendChild(article);
         }
 

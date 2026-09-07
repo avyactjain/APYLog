@@ -22,7 +22,24 @@ const HEADER = [
   "shortfall",
   "chargeToDate",
   "isLiquidated",
+  "token0Apy",
+  "token1Apy",
+  "tradingApy",
 ].join(",");
+
+export type LastSnapshotDetails = {
+  supplied: number;
+  borrowed: number;
+  equity: number;
+  token0Usd: number;
+  token1Usd: number;
+  token0Apy: number;
+  token1Apy: number;
+  tradingApy: number;
+  supplyApy: number;
+  borrowApy: number;
+  netApy: number;
+};
 
 type CsvRow = {
   timestamp: string;
@@ -33,6 +50,7 @@ type CsvRow = {
   shortfall: number;
   chargeToDate: number;
   below2pct: boolean;
+  last: LastSnapshotDetails;
 };
 
 export type SnapshotLog = {
@@ -49,6 +67,7 @@ export type PositionSummary = {
   lastAt: string;
   lastNetApy: number;
   chargeToDate: number;
+  lastSnapshot: LastSnapshotDetails;
 };
 
 export type OutputSummary = {
@@ -58,6 +77,11 @@ export type OutputSummary = {
 
 function csvPath(): string {
   return join(process.cwd(), "output.csv");
+}
+
+function num(cols: string[], index: number, fallback = 0): number {
+  const value = Number(cols[index]);
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function parseRows(raw: string): CsvRow[] {
@@ -88,6 +112,19 @@ function parseRows(raw: string): CsvRow[] {
       shortfall,
       chargeToDate: billed,
       below2pct,
+      last: {
+        supplied: num(cols, 4),
+        borrowed: num(cols, 5),
+        equity: num(cols, 6),
+        token0Usd: num(cols, 7),
+        token1Usd: num(cols, 8),
+        supplyApy: num(cols, 9),
+        borrowApy: num(cols, 10),
+        netApy,
+        token0Apy: num(cols, 17),
+        token1Apy: num(cols, 18),
+        tradingApy: num(cols, 19),
+      },
     });
   }
   return rows;
@@ -176,12 +213,15 @@ export function appendSnapshot(snap: PositionSnapshot, intervalSeconds: number):
     usd(snap.shortfall),
     usd(log.chargeToDate),
     snap.isLiquidated ? "true" : "false",
+    apy(snap.token0Apy),
+    apy(snap.token1Apy),
+    apy(snap.tradingApy),
   ].join(",");
   appendFileSync(path, `${row}\n`);
   return log;
 }
 
-/** One line per vault + NFT: last Net APY, times under 2%, amount to charge. */
+/** One line per vault + NFT: last Net APY, times under 2%, amount to charge, last snapshot amounts/yields. */
 export function readOutputSummary(): OutputSummary {
   const rows = loadRows();
   const byPosition = new Map<string, PositionSummary>();
@@ -198,6 +238,7 @@ export function readOutputSummary(): OutputSummary {
         lastAt: row.timestamp,
         lastNetApy: row.netApy,
         chargeToDate: row.chargeToDate,
+        lastSnapshot: row.last,
       });
       continue;
     }
@@ -208,6 +249,7 @@ export function readOutputSummary(): OutputSummary {
     existing.lastAt = row.timestamp;
     existing.lastNetApy = row.netApy;
     existing.chargeToDate = row.chargeToDate;
+    existing.lastSnapshot = row.last;
   }
   return {
     snapshots: rows.length,

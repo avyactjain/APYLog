@@ -32,6 +32,9 @@ export type PositionSnapshot = {
   isLiquidated: boolean;
   token0Usd: number;
   token1Usd: number;
+  token0Apy: number;
+  token1Apy: number;
+  tradingApy: number;
 };
 
 // --- numbers ---
@@ -150,12 +153,13 @@ export async function snapshotPosition(
 
   const token0Usd = amountUsd(fromShares(shares, asInt(dex.dexState.token0PerSupplyShare)), requirePrice(prices, token0));
   const token1Usd = amountUsd(fromShares(shares, asInt(dex.dexState.token1PerSupplyShare)), requirePrice(prices, token1));
+  const token0Apy = tokenSupplyApy(dex.limitsAndAvailability.liquidityTokenData0.supplyRate, token0, tokenYields);
+  const token1Apy = tokenSupplyApy(dex.limitsAndAvailability.liquidityTokenData1.supplyRate, token1, tokenYields);
   const supplied = token0Usd + token1Usd;
-  const supplyApy =
-    weightedApy([
-      { usd: token0Usd, apy: tokenSupplyApy(dex.limitsAndAvailability.liquidityTokenData0.supplyRate, token0, tokenYields) },
-      { usd: token1Usd, apy: tokenSupplyApy(dex.limitsAndAvailability.liquidityTokenData1.supplyRate, token1, tokenYields) },
-    ]) + tradingApy;
+  const supplyApy = weightedApy([
+    { usd: token0Usd, apy: token0Apy },
+    { usd: token1Usd, apy: token1Apy },
+  ]) + tradingApy;
 
   const scale = borrowLiquidityScale(
     asInt(vault.totalSupplyAndBorrow.totalBorrowVault),
@@ -163,7 +167,19 @@ export async function snapshotPosition(
   );
   const borrowed = amountUsd(asInt(position.borrow) / scale, requirePrice(prices, borrowMint));
 
-  return finishSnapshot(position, supplied, borrowed, supplyApy, borrowApy, intervalSeconds, token0Usd, token1Usd);
+  return finishSnapshot(
+    position,
+    supplied,
+    borrowed,
+    supplyApy,
+    borrowApy,
+    intervalSeconds,
+    token0Usd,
+    token1Usd,
+    token0Apy,
+    token1Apy,
+    tradingApy,
+  );
 }
 
 /** Equity, Net APY, and shortfall vs 2%. */
@@ -176,6 +192,9 @@ function finishSnapshot(
   intervalSeconds: number,
   token0Usd: number,
   token1Usd: number,
+  token0Apy: number,
+  token1Apy: number,
+  tradingApy: number,
 ): PositionSnapshot {
   const equity = supplied - borrowed;
   const netApy = equity === 0 ? 0 : (supplied * supplyApy - borrowed * borrowApy) / equity;
@@ -195,5 +214,8 @@ function finishSnapshot(
     isLiquidated: position.isLiquidated,
     token0Usd,
     token1Usd,
+    token0Apy,
+    token1Apy,
+    tradingApy,
   };
 }
