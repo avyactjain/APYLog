@@ -1,12 +1,13 @@
 import {
   appendSnapshot as appendCsv,
+  readCharges as readCsvCharges,
   readHistory as readCsvHistory,
   readOutputSummary as readCsvSummary,
   type OutputSummary,
   type SnapshotLog,
 } from "./csv.js";
 import { connectDb, type DbClient } from "./db.js";
-import type { HistoryRange, HistorySeries } from "./history.js";
+import type { ChargeSeries, HistoryRange, HistorySeries } from "./history.js";
 import type { PositionSnapshot } from "./snapshot.js";
 
 export type Store = {
@@ -14,6 +15,7 @@ export type Store = {
   appendSnapshot(snap: PositionSnapshot, intervalSeconds: number): Promise<SnapshotLog>;
   readOutputSummary(): Promise<OutputSummary>;
   readHistory(vaultId: number, nftId: number, range: HistoryRange): Promise<HistorySeries>;
+  readCharges(vaultId: number, nftId: number, range: HistoryRange): Promise<ChargeSeries>;
   close(): Promise<void>;
 };
 
@@ -31,6 +33,9 @@ export async function createStore(dbUrl: string | null): Promise<Store> {
       async readHistory(vaultId, nftId, range) {
         return readCsvHistory(vaultId, nftId, range);
       },
+      async readCharges(vaultId, nftId, range) {
+        return readCsvCharges(vaultId, nftId, range);
+      },
       async close() {
         return;
       },
@@ -43,6 +48,7 @@ export async function createStore(dbUrl: string | null): Promise<Store> {
     appendSnapshot: db.appendSnapshot,
     readOutputSummary: db.readOutputSummary,
     readHistory: db.readHistory,
+    readCharges: db.readCharges,
     close: db.close,
   };
 }

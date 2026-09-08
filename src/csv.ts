@@ -1,7 +1,16 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GUARANTEE, type PositionSnapshot } from "./snapshot.js";
-import { bucketPoints, lookbackMs, rangeMs, withDma7, type HistoryRange, type HistorySeries } from "./history.js";
+import {
+  bucketPoints,
+  chargeBounds,
+  lookbackMs,
+  rangeMs,
+  withDma7,
+  type ChargeSeries,
+  type HistoryRange,
+  type HistorySeries,
+} from "./history.js";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -45,6 +54,7 @@ export type LastSnapshotDetails = {
 type CsvRow = {
   timestamp: string;
   timestampMs: number;
+  intervalSeconds: number;
   vaultId: number;
   nftId: number;
   netApy: number;
@@ -92,6 +102,7 @@ function parseRows(raw: string): CsvRow[] {
     const cols = line.split(",");
     const timestamp = cols[0] ?? "";
     const timestampMs = Date.parse(timestamp);
+    const intervalSeconds = Number(cols[1]);
     const vaultId = Number(cols[2]);
     const nftId = Number(cols[3]);
     const netApy = Number(cols[11]);
@@ -107,6 +118,7 @@ function parseRows(raw: string): CsvRow[] {
     rows.push({
       timestamp,
       timestampMs,
+      intervalSeconds: Number.isFinite(intervalSeconds) && intervalSeconds > 0 ? intervalSeconds : 0,
       vaultId,
       nftId,
       netApy,
@@ -278,4 +290,22 @@ export function readHistory(vaultId: number, nftId: number, range: HistoryRange)
     range,
     points: withDma7(bucketPoints(raw, range), fromMs, range),
   };
+}
+
+/** One charge row per snapshot in a capped time window. Oldest first. */
+export function readCharges(vaultId: number, nftId: number, range: HistoryRange): ChargeSeries {
+  const fromMs = Date.now() - rangeMs(range);
+  const rows: ChargeSeries["rows"] = [];
+  for (const row of loadRows()) {
+    if (row.vaultId !== vaultId || row.nftId !== nftId || row.timestampMs < fromMs) {
+      continue;
+    }
+    const bounds = chargeBounds(row.timestampMs, row.intervalSeconds);
+    rows.push({
+      from: bounds.from,
+      to: bounds.to,
+      charge: row.shortfall,
+    });
+  }
+  return { range, rows };
 }

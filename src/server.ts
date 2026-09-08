@@ -95,22 +95,43 @@ function serveStatic(req: IncomingMessage, res: ServerResponse): void {
   createReadStream(path).pipe(res);
 }
 
-async function handleHistory(store: Store, url: URL, res: ServerResponse): Promise<void> {
-  const range = parseHistoryRange(queryParam(url, "range"));
+async function resolvePosition(
+  store: Store,
+  url: URL,
+): Promise<{ vaultId: number; nftId: number } | null> {
   let vaultId = queryInt(url, "vaultId");
   let nftId = queryInt(url, "nftId");
-  if (vaultId === null || nftId === null) {
-    const summary = await store.readOutputSummary();
-    const first = summary.positions[0];
-    if (first === undefined) {
-      send(res, 200, JSON.stringify({ range, points: [] }), "application/json; charset=utf-8");
-      return;
-    }
-    vaultId = first.vaultId;
-    nftId = first.nftId;
+  if (vaultId !== null && nftId !== null) {
+    return { vaultId, nftId };
   }
-  const history = await store.readHistory(vaultId, nftId, range);
+  const summary = await store.readOutputSummary();
+  const first = summary.positions[0];
+  if (first === undefined) {
+    return null;
+  }
+  return { vaultId: first.vaultId, nftId: first.nftId };
+}
+
+async function handleHistory(store: Store, url: URL, res: ServerResponse): Promise<void> {
+  const range = parseHistoryRange(queryParam(url, "range"));
+  const pos = await resolvePosition(store, url);
+  if (pos === null) {
+    send(res, 200, JSON.stringify({ range, points: [] }), "application/json; charset=utf-8");
+    return;
+  }
+  const history = await store.readHistory(pos.vaultId, pos.nftId, range);
   send(res, 200, JSON.stringify(history), "application/json; charset=utf-8");
+}
+
+async function handleCharges(store: Store, url: URL, res: ServerResponse): Promise<void> {
+  const range = parseHistoryRange(queryParam(url, "range"));
+  const pos = await resolvePosition(store, url);
+  if (pos === null) {
+    send(res, 200, JSON.stringify({ range, rows: [] }), "application/json; charset=utf-8");
+    return;
+  }
+  const charges = await store.readCharges(pos.vaultId, pos.nftId, range);
+  send(res, 200, JSON.stringify(charges), "application/json; charset=utf-8");
 }
 
 /** HTTP server: page, summary JSON, history JSON, health. */
@@ -145,6 +166,13 @@ export function startServer(intervalSeconds: number, port: number, store: Store)
     if (url.pathname === "/api/history") {
       void handleHistory(store, url, res).catch(() => {
         send(res, 500, "Could not load history", "text/plain; charset=utf-8");
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/charges") {
+      void handleCharges(store, url, res).catch(() => {
+        send(res, 500, "Could not load charges", "text/plain; charset=utf-8");
       });
       return;
     }

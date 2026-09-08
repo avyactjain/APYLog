@@ -24,7 +24,7 @@ If `rpcUrl` is still empty after those files, the `RPC_URL` env var is used (for
 
 If `DB_URL` (or `dbUrl` in config) is set, snapshots go to Postgres only. If it is empty, snapshots go to `output.csv` only. Prod snapshots every hour (`config/prod.json`).
 
-The page charts supply rate and borrow rate. Hover a point to see the spread (supply − borrow). Use **1d / 1w / 1m / 1y** to load that window only.
+The page charts supply rate and borrow rate. Hover a point to see the spread (supply − borrow). A table lists each snapshot’s charge for the same window. Use **1d / 1w / 1m / 1y** to load that window only.
 
 ## Deploy
 

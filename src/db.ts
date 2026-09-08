@@ -5,9 +5,11 @@ import type { LastSnapshotDetails, OutputSummary, PositionSummary, SnapshotLog }
 import { GUARANTEE, type PositionSnapshot } from "./snapshot.js";
 import {
   bucketMs,
+  chargeBounds,
   lookbackMs,
   rangeMs,
   withDma7,
+  type ChargeSeries,
   type HistoryRange,
   type HistorySeries,
 } from "./history.js";
@@ -18,6 +20,7 @@ export type DbClient = {
   appendSnapshot(snap: PositionSnapshot, intervalSeconds: number): Promise<SnapshotLog>;
   readOutputSummary(): Promise<OutputSummary>;
   readHistory(vaultId: number, nftId: number, range: HistoryRange): Promise<HistorySeries>;
+  readCharges(vaultId: number, nftId: number, range: HistoryRange): Promise<ChargeSeries>;
   close(): Promise<void>;
 };
 
@@ -207,6 +210,38 @@ async function readHistory(
   };
 }
 
+async function readCharges(
+  pool: pg.Pool,
+  vaultId: number,
+  nftId: number,
+  range: HistoryRange,
+): Promise<ChargeSeries> {
+  const from = new Date(Date.now() - rangeMs(range)).toISOString();
+  const result = await pool.query<{
+    timestamp: Date | string;
+    interval_seconds: string | number;
+    shortfall: string | number;
+  }>(
+    `SELECT timestamp, interval_seconds, shortfall
+     FROM snapshots
+     WHERE vault_id = $1 AND nft_id = $2 AND timestamp >= $3
+     ORDER BY timestamp`,
+    [vaultId, nftId, from],
+  );
+  return {
+    range,
+    rows: result.rows.map((row) => {
+      const toMs = row.timestamp instanceof Date ? row.timestamp.getTime() : Date.parse(String(row.timestamp));
+      const bounds = chargeBounds(toMs, num(row.interval_seconds));
+      return {
+        from: bounds.from,
+        to: bounds.to,
+        charge: num(row.shortfall),
+      };
+    }),
+  };
+}
+
 export async function connectDb(dbUrl: string): Promise<DbClient> {
   const pool = new pg.Pool({ connectionString: dbUrl });
   const sql = readFileSync(join(process.cwd(), "sql/001_snapshots.sql"), "utf8");
@@ -224,6 +259,7 @@ export async function connectDb(dbUrl: string): Promise<DbClient> {
     },
     readOutputSummary: () => readOutputSummary(pool),
     readHistory: (vaultId, nftId, range) => readHistory(pool, vaultId, nftId, range),
+    readCharges: (vaultId, nftId, range) => readCharges(pool, vaultId, nftId, range),
     close: () => pool.end(),
   };
 }

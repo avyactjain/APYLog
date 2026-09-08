@@ -15,6 +15,17 @@ export type HistorySeries = {
   points: HistoryPoint[];
 };
 
+export type ChargeRow = {
+  from: string;
+  to: string;
+  charge: number;
+};
+
+export type ChargeSeries = {
+  range: HistoryRange;
+  rows: ChargeRow[];
+};
+
 type RawPoint = {
   timestampMs: number;
   supplyApy: number;
@@ -52,6 +63,15 @@ export function bucketMs(range: HistoryRange): number {
 
 export function lookbackMs(): number {
   return SEVEN_DAYS_MS;
+}
+
+/** Interval covered by one snapshot: [timestamp − interval, timestamp]. */
+export function chargeBounds(toMs: number, intervalSeconds: number): { from: string; to: string } {
+  const seconds = Number.isFinite(intervalSeconds) && intervalSeconds > 0 ? intervalSeconds : 0;
+  return {
+    from: new Date(toMs - seconds * 1000).toISOString(),
+    to: new Date(toMs).toISOString(),
+  };
 }
 
 /** Group points into time buckets; each bucket is the mean APY. */
