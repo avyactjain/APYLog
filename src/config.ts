@@ -16,6 +16,7 @@ export type AppConfig = {
   intervalSeconds: number;
   positions: PositionRef[];
   tokenYields: TokenYield[];
+  dbUrl: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -63,7 +64,7 @@ function parseConfig(value: unknown): AppConfig {
     throw new Error("config must be an object");
   }
 
-  const { rpcUrl, intervalSeconds, positions, tokenYields } = value;
+  const { rpcUrl, intervalSeconds, positions, tokenYields, dbUrl } = value;
   if (typeof rpcUrl !== "string" || rpcUrl.trim() === "") {
     throw new Error("config.rpcUrl must be set (usually in config/local.json or config/prod.json)");
   }
@@ -85,7 +86,25 @@ function parseConfig(value: unknown): AppConfig {
     intervalSeconds,
     positions: positions.map(parsePosition),
     tokenYields: tokenYields.map(parseTokenYield),
+    dbUrl: parseDbUrl(dbUrl),
   };
+}
+
+function parseDbUrl(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new Error("config.dbUrl must be a string");
+  }
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  if (!trimmed.startsWith("postgres://") && !trimmed.startsWith("postgresql://")) {
+    throw new Error("config.dbUrl must start with postgres:// or postgresql://");
+  }
+  return trimmed;
 }
 
 /** Later keys replace earlier ones. Nested objects merge; lists replace. */
@@ -142,16 +161,31 @@ function applyRpcUrlEnv(merged: Record<string, unknown>): Record<string, unknown
   return { ...merged, rpcUrl: fromEnv };
 }
 
+/** File layers win. If dbUrl is still empty, use env `DB_URL`. */
+function applyDbUrlEnv(merged: Record<string, unknown>): Record<string, unknown> {
+  const current = merged.dbUrl;
+  if (typeof current === "string" && current.trim() !== "") {
+    return merged;
+  }
+  const fromEnv = process.env.DB_URL?.trim() ?? "";
+  if (fromEnv === "") {
+    return merged;
+  }
+  return { ...merged, dbUrl: fromEnv };
+}
+
 /**
  * Layers, last wins: default.json → staging.json or prod.json → local.json.
- * Then `RPC_URL` if rpcUrl is still missing. Set APP_ENV or NODE_ENV to `staging` or `prod`.
+ * Then `RPC_URL` / `DB_URL` if those fields are still missing.
  */
 export function loadConfig(configDir = join(process.cwd(), "config")): AppConfig {
   const env = envLayer();
-  const merged = applyRpcUrlEnv(
-    merge(
-      merge(readJson(join(configDir, "default.json")), env === null ? {} : readJsonIfPresent(join(configDir, `${env}.json`))),
-      readJsonIfPresent(join(configDir, "local.json")),
+  const merged = applyDbUrlEnv(
+    applyRpcUrlEnv(
+      merge(
+        merge(readJson(join(configDir, "default.json")), env === null ? {} : readJsonIfPresent(join(configDir, `${env}.json`))),
+        readJsonIfPresent(join(configDir, "local.json")),
+      ),
     ),
   );
   return parseConfig(merged);

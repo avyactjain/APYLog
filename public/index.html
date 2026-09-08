@@ -22,7 +22,7 @@
       }
 
       main {
-        max-width: 520px;
+        max-width: 880px;
         margin: 0 auto;
         padding: 2.5rem 1.25rem 3rem;
       }
@@ -131,6 +131,46 @@
       .section-label:first-of-type {
         margin-top: 0;
       }
+
+      #chart-panel {
+        margin: 0 0 1.75rem;
+      }
+
+      #chart-panel.hidden {
+        display: none;
+      }
+
+      #chart-caption {
+        margin: 0 0 0.6rem;
+        color: #999;
+        font-size: 0.9rem;
+      }
+
+      #range-buttons {
+        display: flex;
+        gap: 0.4rem;
+        margin: 0 0 0.85rem;
+      }
+
+      #range-buttons button {
+        border: 1px solid #3a3a3a;
+        border-radius: 8px;
+        background: #181818;
+        color: #eee;
+        padding: 0.35rem 0.7rem;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      #range-buttons button.active {
+        background: #2a2a2a;
+        border-color: #666;
+      }
+
+      #apy-chart-wrap {
+        position: relative;
+        height: 280px;
+      }
     </style>
   </head>
   <body>
@@ -140,9 +180,22 @@
       <p class="caption">until next snapshot</p>
       <p id="status"></p>
       <p id="snapshot-count"></p>
+      <div id="chart-panel" class="hidden">
+        <p id="chart-caption"></p>
+        <div id="range-buttons">
+          <button type="button" data-range="1d">1d</button>
+          <button type="button" data-range="1w" class="active">1w</button>
+          <button type="button" data-range="1m">1m</button>
+          <button type="button" data-range="1y">1y</button>
+        </div>
+        <div id="apy-chart-wrap">
+          <canvas id="apy-chart"></canvas>
+        </div>
+      </div>
       <div id="positions"></div>
       <p id="total-charge"></p>
     </main>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
       const GUARANTEE = 0.02;
       const countdownEl = document.getElementById("countdown");
@@ -150,8 +203,17 @@
       const snapshotCountEl = document.getElementById("snapshot-count");
       const positionsEl = document.getElementById("positions");
       const totalChargeEl = document.getElementById("total-charge");
+      const chartPanelEl = document.getElementById("chart-panel");
+      const chartCaptionEl = document.getElementById("chart-caption");
+      const rangeButtonsEl = document.getElementById("range-buttons");
+      const chartCanvas = document.getElementById("apy-chart");
 
       let nextSnapshotAt = null;
+      let chartRange = "1w";
+      let chartVaultId = null;
+      let chartNftId = null;
+      let apyChart = null;
+      let historyLoaded = false;
 
       function pad2(n) {
         return String(n).padStart(2, "0");
@@ -213,6 +275,115 @@
         return span;
       }
 
+      function hideChart() {
+        chartPanelEl.classList.add("hidden");
+        chartVaultId = null;
+        chartNftId = null;
+        historyLoaded = false;
+      }
+
+      function pctSeries(points, key) {
+        return points.map((p) => (p[key] || 0) * 100);
+      }
+
+      function renderChart(points) {
+        const labels = points.map((p) => p.timestamp);
+        const data = {
+          labels,
+          datasets: [
+            {
+              label: "supply",
+              data: pctSeries(points, "supplyApy"),
+              borderColor: "#3dd68c",
+              backgroundColor: "transparent",
+              tension: 0.2,
+              pointRadius: 0,
+            },
+            {
+              label: "borrow",
+              data: pctSeries(points, "borrowApy"),
+              borderColor: "#f0ad4e",
+              backgroundColor: "transparent",
+              tension: 0.2,
+              pointRadius: 0,
+            },
+          ],
+        };
+        const options = {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { labels: { color: "#ccc" } },
+            tooltip: {
+              callbacks: {
+                afterBody(items) {
+                  if (items.length === 0) {
+                    return "";
+                  }
+                  const chart = items[0].chart;
+                  const i = items[0].dataIndex;
+                  const supply = Number(chart.data.datasets[0]?.data[i] ?? 0);
+                  const borrow = Number(chart.data.datasets[1]?.data[i] ?? 0);
+                  return "spread: " + (supply - borrow).toFixed(2) + "%";
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              ticks: {
+                color: "#888",
+                maxTicksLimit: 8,
+                callback: function (value) {
+                  const label = this.getLabelForValue(value);
+                  const d = new Date(label);
+                  if (Number.isNaN(d.getTime())) {
+                    return label;
+                  }
+                  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+                },
+              },
+              grid: { color: "#222" },
+            },
+            y: {
+              ticks: {
+                color: "#888",
+                callback: (value) => Number(value).toFixed(2) + "%",
+              },
+              grid: { color: "#222" },
+            },
+          },
+        };
+        if (apyChart !== null) {
+          apyChart.destroy();
+        }
+        apyChart = new Chart(chartCanvas, { type: "line", data, options });
+      }
+
+      async function fetchHistory() {
+        if (chartVaultId === null || chartNftId === null) {
+          return;
+        }
+        try {
+          const url =
+            "/api/history?vaultId=" +
+            encodeURIComponent(String(chartVaultId)) +
+            "&nftId=" +
+            encodeURIComponent(String(chartNftId)) +
+            "&range=" +
+            encodeURIComponent(chartRange);
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) {
+            throw new Error("bad status");
+          }
+          const data = await res.json();
+          renderChart(data.points || []);
+        } catch {
+          return;
+        }
+      }
+
       function renderSummary(data) {
         if (data.snapshots === 0) {
           snapshotCountEl.textContent = "";
@@ -222,6 +393,7 @@
           waiting.appendChild(text("Waiting for first snapshot"));
           positionsEl.appendChild(waiting);
           totalChargeEl.textContent = "";
+          hideChart();
           return;
         }
 
@@ -266,6 +438,21 @@
         }
 
         totalChargeEl.textContent = "Total charge: " + formatCharge(data.totalCharge);
+
+        const first = data.positions[0];
+        if (first) {
+          const firstLoad = !historyLoaded;
+          chartVaultId = first.vaultId;
+          chartNftId = first.nftId;
+          chartCaptionEl.textContent = "Supply and borrow, vault " + first.vaultId + ", NFT " + first.nftId;
+          chartPanelEl.classList.remove("hidden");
+          if (firstLoad) {
+            historyLoaded = true;
+            void fetchHistory();
+          }
+        } else {
+          hideChart();
+        }
       }
 
       function tickCountdown() {
@@ -293,8 +480,23 @@
         }
       }
 
+      rangeButtonsEl.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-range]");
+        if (!button) {
+          return;
+        }
+        chartRange = button.getAttribute("data-range") || "1w";
+        for (const child of rangeButtonsEl.querySelectorAll("button")) {
+          child.classList.toggle("active", child === button);
+        }
+        void fetchHistory();
+      });
+
       fetchSummary();
       setInterval(fetchSummary, 1000);
+      setInterval(() => {
+        void fetchHistory();
+      }, 30000);
       setInterval(tickCountdown, 250);
     </script>
   </body>

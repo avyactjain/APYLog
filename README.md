@@ -16,22 +16,57 @@ Config is layered, last file wins: `config/default.json` → `config/staging.jso
 
 Copy `config/local.json.example` to `config/local.json` and put your RPC URL there. `local.json` is not committed.
 
-If `rpcUrl` is still empty after those files, the `RPC_URL` env var is used (for deploy).
+If `rpcUrl` is still empty after those files, the `RPC_URL` env var is used (for deploy). Same for `dbUrl` and `DB_URL`.
 
 `APP_ENV` or `NODE_ENV`: `staging` or `prod` (`production` means `prod`). Unset means default + local only.
 
-`npm start` runs the compiled app (run `npm run build` first). It snapshots on the interval, writes `output.csv`, and serves a summary page on `PORT` (default `3000`). Open `http://localhost:3000`.
+`npm start` runs the compiled app (run `npm run build` first). It snapshots on the interval and serves a summary page on `PORT` (default `3000`). Open `http://localhost:3000`.
+
+If `DB_URL` (or `dbUrl` in config) is set, snapshots go to Postgres only. If it is empty, snapshots go to `output.csv` only. Prod snapshots every hour (`config/prod.json`).
+
+The page charts supply rate and borrow rate. Hover a point to see the spread (supply − borrow). Use **1d / 1w / 1m / 1y** to load that window only.
 
 ## Deploy
 
-This must stay running (snapshot timer + web UI). Use an always-on host (Railway, Render, Fly), not a static site host.
+This must stay running (snapshot timer + web UI). On the Oracle VM, run Postgres and the app with Compose. Postgres listens on the VM loopback only (`127.0.0.1:5432`). Do not open 5432 on the public internet.
+
+Create a `.env` next to `docker-compose.yml` (do not commit it):
+
+```
+RPC_URL=https://your-rpc
+POSTGRES_PASSWORD=pick-a-secret
+```
+
+```bash
+docker compose up -d
+```
+
+App: `http://YOUR_PUBLIC_IP:3000`. Inside Compose the app uses `DB_URL=postgresql://apylog:PASSWORD@postgres:5432/apylog`.
+
+CSV-only (no database):
 
 ```bash
 docker build -t apylog .
 docker run --rm -p 3000:3000 -e RPC_URL="https://your-rpc" -e APP_ENV=prod -e PORT=3000 apylog
 ```
 
-Set `RPC_URL`, `APP_ENV=prod`, and `PORT` on the host. Do not commit the RPC URL. CSV history starts empty on a fresh host and is lost on restart unless you add a volume later.
+### Open Postgres from your laptop
+
+Keep 5432 closed on the VM. Tunnel it:
+
+```bash
+ssh -L 5432:127.0.0.1:5432 ubuntu@YOUR_PUBLIC_IP
+```
+
+Then in DBeaver, TablePlus, or `psql`, connect to `localhost:5432`:
+
+- database: `apylog`
+- user: `apylog`
+- password: the same `POSTGRES_PASSWORD`
+
+```bash
+psql "postgresql://apylog:PASSWORD@127.0.0.1:5432/apylog"
+```
 
 ## Output
 

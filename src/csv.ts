@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GUARANTEE, type PositionSnapshot } from "./snapshot.js";
+import { bucketPoints, lookbackMs, rangeMs, withDma7, type HistoryRange, type HistorySeries } from "./history.js";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -254,5 +255,27 @@ export function readOutputSummary(): OutputSummary {
   return {
     snapshots: rows.length,
     positions: [...byPosition.values()].sort((a, b) => a.vaultId - b.vaultId || a.nftId - b.nftId),
+  };
+}
+
+/** History for one vault + NFT in a capped time window. */
+export function readHistory(vaultId: number, nftId: number, range: HistoryRange): HistorySeries {
+  const now = Date.now();
+  const fromMs = now - rangeMs(range);
+  const lookbackFrom = fromMs - lookbackMs();
+  const raw: Array<{ timestampMs: number; supplyApy: number; borrowApy: number }> = [];
+  for (const row of loadRows()) {
+    if (row.vaultId !== vaultId || row.nftId !== nftId || row.timestampMs < lookbackFrom) {
+      continue;
+    }
+    raw.push({
+      timestampMs: row.timestampMs,
+      supplyApy: row.last.supplyApy,
+      borrowApy: row.last.borrowApy,
+    });
+  }
+  return {
+    range,
+    points: withDma7(bucketPoints(raw, range), fromMs, range),
   };
 }

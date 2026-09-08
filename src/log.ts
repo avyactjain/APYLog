@@ -1,5 +1,5 @@
 import { createConsola } from "consola";
-import { readOutputSummary, type PositionSummary } from "./csv.js";
+import type { OutputSummary, PositionSummary } from "./csv.js";
 import { GUARANTEE, type PositionSnapshot } from "./snapshot.js";
 
 export const log = createConsola({
@@ -87,11 +87,10 @@ function positionLines(row: PositionSummary): string[] {
   ];
 }
 
-/** Print a short wrap-up of output.csv. */
-export function printOutputSummary(): void {
-  const summary = readOutputSummary();
+/** Print a short wrap-up of stored snapshots. */
+export function printOutputSummary(summary: OutputSummary): void {
   if (summary.snapshots === 0) {
-    log.box("No snapshots in output.csv");
+    log.box("No snapshots stored");
     return;
   }
 

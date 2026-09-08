@@ -16,11 +16,13 @@
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^24.13.3",
+    "@types/pg": "^8.23.1",
     "typescript": "^7.0.2"
   },
   "dependencies": {
     "@jup-ag/lend-read": "^0.0.14",
-    "consola": "^3.4.2"
+    "consola": "^3.4.2",
+    "pg": "^8.23.0"
   },
   "overrides": {
     "uuid": "9.0.1"

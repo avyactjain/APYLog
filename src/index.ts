@@ -1,15 +1,15 @@
 import { Client } from "@jup-ag/lend-read";
 import { loadConfig, type AppConfig } from "./config.js";
-import { appendSnapshot } from "./csv.js";
 import { log, printOutputSummary, printSnapshot } from "./log.js";
 import { listenPort, startServer } from "./server.js";
 import { snapshotPosition } from "./snapshot.js";
+import { createStore, type Store } from "./store.js";
 
-async function snapshotAll(client: Client, config: AppConfig): Promise<void> {
+async function snapshotAll(client: Client, config: AppConfig, store: Store): Promise<void> {
   for (const ref of config.positions) {
     try {
       const snap = await snapshotPosition(client, ref, config.tokenYields, config.intervalSeconds);
-      const saved = appendSnapshot(snap, config.intervalSeconds);
+      const saved = await store.appendSnapshot(snap, config.intervalSeconds);
       printSnapshot(snap, saved.chargeToDate, saved.dma7);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -20,14 +20,16 @@ async function snapshotAll(client: Client, config: AppConfig): Promise<void> {
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  const store = await createStore(config.dbUrl);
   const client = new Client(config.rpcUrl);
   const delayMs = config.intervalSeconds * 1000;
   const port = listenPort();
   let running = false;
   let stopping = false;
 
-  startServer(config.intervalSeconds, port);
+  startServer(config.intervalSeconds, port, store);
   log.start(`Web UI on http://0.0.0.0:${String(port)}`);
+  log.start(store.kind === "postgres" ? "Using Postgres" : "Using CSV");
   log.start(`Snapshot every ${String(config.intervalSeconds)} seconds`);
 
   const tick = async (): Promise<void> => {
@@ -40,7 +42,7 @@ async function main(): Promise<void> {
     }
     running = true;
     try {
-      await snapshotAll(client, config);
+      await snapshotAll(client, config, store);
     } finally {
       running = false;
     }
@@ -57,8 +59,12 @@ async function main(): Promise<void> {
     stopping = true;
     clearInterval(timer);
     log.info(`Stopped (${signal})`);
-    printOutputSummary();
-    process.exit(0);
+    void store.readOutputSummary().then((summary) => {
+      printOutputSummary(summary);
+      void store.close().finally(() => {
+        process.exit(0);
+      });
+    });
   };
 
   process.on("SIGINT", () => {

@@ -1,6 +1,7 @@
 import type { Client } from "@jup-ag/lend-read";
 import { stakingYieldFor, type PositionRef, type TokenYield } from "./config.js";
 import { tradingApr } from "./fluid.js";
+import { toJsonSafe } from "./json.js";
 import { amountUsd, usdPrices, type TokenPrice } from "./prices.js";
 
 /** Chain integers use this scale: 100 = 1%, so 625 = 6.25%. */
@@ -35,6 +36,7 @@ export type PositionSnapshot = {
   token0Apy: number;
   token1Apy: number;
   tradingApy: number;
+  rawPosition: unknown;
 };
 
 // --- numbers ---
@@ -165,6 +167,7 @@ export async function snapshotPosition(
     asInt(vault.totalSupplyAndBorrow.totalBorrowVault),
     asInt(vault.totalSupplyAndBorrow.totalBorrowLiquidityOrDex),
   );
+
   const borrowed = amountUsd(asInt(position.borrow) / scale, requirePrice(prices, borrowMint));
 
   return finishSnapshot(
@@ -179,6 +182,7 @@ export async function snapshotPosition(
     token0Apy,
     token1Apy,
     tradingApy,
+    toJsonSafe(position),
   );
 }
 
@@ -195,6 +199,7 @@ function finishSnapshot(
   token0Apy: number,
   token1Apy: number,
   tradingApy: number,
+  rawPosition: unknown,
 ): PositionSnapshot {
   const equity = supplied - borrowed;
   const netApy = equity === 0 ? 0 : (supplied * supplyApy - borrowed * borrowApy) / equity;
@@ -217,5 +222,6 @@ function finishSnapshot(
     token0Apy,
     token1Apy,
     tradingApy,
+    rawPosition,
   };
 }

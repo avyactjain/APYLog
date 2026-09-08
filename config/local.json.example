@@ -1,3 +1,4 @@
 {
-  "rpcUrl": "https://your-rpc-url"
+  "rpcUrl": "https://your-rpc-url",
+  "dbUrl": ""
 }

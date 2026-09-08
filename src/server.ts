@@ -1,7 +1,9 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
-import { readOutputSummary } from "./csv.js";
+import type { OutputSummary } from "./csv.js";
+import { parseHistoryRange } from "./history.js";
+import type { Store } from "./store.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -15,7 +17,7 @@ const MIME: Record<string, string> = {
 
 export type SummaryResponse = {
   snapshots: number;
-  positions: ReturnType<typeof readOutputSummary>["positions"];
+  positions: OutputSummary["positions"];
   totalCharge: number;
   intervalSeconds: number;
   lastSnapshotAt: string | null;
@@ -34,8 +36,21 @@ function send(res: ServerResponse, status: number, body: string, type: string): 
   res.end(body);
 }
 
-function buildSummary(intervalSeconds: number): SummaryResponse {
-  const summary = readOutputSummary();
+function queryParam(url: URL, name: string): string | null {
+  const value = url.searchParams.get(name);
+  return value === null || value.trim() === "" ? null : value.trim();
+}
+
+function queryInt(url: URL, name: string): number | null {
+  const raw = queryParam(url, name);
+  if (raw === null) {
+    return null;
+  }
+  const n = Number(raw);
+  return Number.isInteger(n) ? n : null;
+}
+
+function buildSummary(summary: OutputSummary, intervalSeconds: number): SummaryResponse {
   const totalCharge = summary.positions.reduce((sum, row) => sum + row.chargeToDate, 0);
   let lastSnapshotAt: string | null = null;
   for (const row of summary.positions) {
@@ -80,25 +95,57 @@ function serveStatic(req: IncomingMessage, res: ServerResponse): void {
   createReadStream(path).pipe(res);
 }
 
-/** HTTP server: page, summary JSON, health. */
-export function startServer(intervalSeconds: number, port: number): void {
+async function handleHistory(store: Store, url: URL, res: ServerResponse): Promise<void> {
+  const range = parseHistoryRange(queryParam(url, "range"));
+  let vaultId = queryInt(url, "vaultId");
+  let nftId = queryInt(url, "nftId");
+  if (vaultId === null || nftId === null) {
+    const summary = await store.readOutputSummary();
+    const first = summary.positions[0];
+    if (first === undefined) {
+      send(res, 200, JSON.stringify({ range, points: [] }), "application/json; charset=utf-8");
+      return;
+    }
+    vaultId = first.vaultId;
+    nftId = first.nftId;
+  }
+  const history = await store.readHistory(vaultId, nftId, range);
+  send(res, 200, JSON.stringify(history), "application/json; charset=utf-8");
+}
+
+/** HTTP server: page, summary JSON, history JSON, health. */
+export function startServer(intervalSeconds: number, port: number, store: Store): void {
   const server = createServer((req, res) => {
     const method = req.method ?? "GET";
-    const url = req.url ?? "/";
-    const path = url.split("?")[0] ?? "/";
+    const host = req.headers.host ?? "localhost";
+    const url = new URL(req.url ?? "/", `http://${host}`);
 
     if (method !== "GET" && method !== "HEAD") {
       send(res, 405, "Method not allowed", "text/plain; charset=utf-8");
       return;
     }
 
-    if (path === "/health") {
+    if (url.pathname === "/health") {
       send(res, 200, "ok", "text/plain; charset=utf-8");
       return;
     }
 
-    if (path === "/api/summary") {
-      send(res, 200, JSON.stringify(buildSummary(intervalSeconds)), "application/json; charset=utf-8");
+    if (url.pathname === "/api/summary") {
+      void store
+        .readOutputSummary()
+        .then((summary) => {
+          send(res, 200, JSON.stringify(buildSummary(summary, intervalSeconds)), "application/json; charset=utf-8");
+        })
+        .catch(() => {
+          send(res, 500, "Could not load summary", "text/plain; charset=utf-8");
+        });
+      return;
+    }
+
+    if (url.pathname === "/api/history") {
+      void handleHistory(store, url, res).catch(() => {
+        send(res, 500, "Could not load history", "text/plain; charset=utf-8");
+      });
       return;
     }
 

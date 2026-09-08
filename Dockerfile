@@ -10,6 +10,7 @@ COPY tsconfig.json ./
 COPY src ./src
 COPY config ./config
 COPY public ./public
+COPY sql ./sql
 
 RUN npm run build
 
